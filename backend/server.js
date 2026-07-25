@@ -3,7 +3,11 @@ import cors from "cors";
 import crypto from "crypto";
 import Database from "better-sqlite3";
 import TelegramBot from "node-telegram-bot-api";
+import path from "path";
+import { fileURLToPath } from "url";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 // ====== CONFIG ======
 const BOT_TOKEN = process.env.BOT_TOKEN; // from BotFather
 const PORT = process.env.PORT || 3000;
@@ -99,7 +103,7 @@ function resetDailyIfNeeded(user) {
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static("../public"));
+app.use(express.static(path.join(__dirname, "public")));
 
 // Middleware: auth via Telegram initData sent in header
 function auth(req, res, next) {
