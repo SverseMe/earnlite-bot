@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EarnLite</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: #0f1220;
+    --card: #171b2e;
+    --accent: #00c2a8;
+    --accent2: #1a2b6b;
+    --text: #ffffff;
+    --muted: #8a8fa3;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    padding: 16px;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+  .logo { font-weight:700; font-size:20px; }
+  .logo span { color: var(--accent); }
+  .balance-card {
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .balance-label { font-size:12px; opacity:0.85; text-transform:uppercase; letter-spacing:1px; }
+  .balance-amount { font-size: 36px; font-weight: 800; margin: 6px 0; }
+  .stats-row { display:flex; gap:10px; margin-bottom:16px; }
+  .stat-box { flex:1; background: var(--card); border-radius:12px; padding:12px; text-align:center; }
+  .stat-num { font-size:18px; font-weight:700; }
+  .stat-label { font-size:11px; color: var(--muted); margin-top:2px; }
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 18px;
+    margin-bottom: 14px;
+  }
+  .card-title { font-size:15px; font-weight:600; margin-bottom:10px; }
+  .btn {
+    display:block; width:100%;
+    background: var(--accent);
+    color: #04231d;
+    font-weight: 700;
+    border: none;
+    border-radius: 12px;
+    padding: 14px;
+    font-size: 15px;
+    cursor: pointer;
+    text-align:center;
+  }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-secondary { background: #24284433; color: var(--text); border: 1px solid #333a55; }
+  .progress-bar { height:6px; background:#282c46; border-radius:4px; overflow:hidden; margin-top:10px; }
+  .progress-fill { height:100%; background: var(--accent); transition: width 0.3s; }
+  .tabs { display:flex; gap:8px; margin-top:20px; }
+  .tab { flex:1; text-align:center; padding:10px 4px; border-radius:10px; font-size:12px; color: var(--muted); }
+  .tab.active { background: var(--card); color: var(--accent); font-weight:700; }
+  .msg { font-size:13px; color: var(--muted); margin-top:8px; text-align:center; min-height:16px; }
+  input {
+    width:100%; padding:12px; border-radius:10px; border:1px solid #333a55;
+    background:#1e2238; color:var(--text); margin-bottom:10px; font-size:14px;
+  }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">Earn<span>Lite</span></div>
+  </div>
+
+  <div class="balance-card">
+    <div class="balance-label">Total Balance</div>
+    <div class="balance-amount" id="balance">$0.00</div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-box"><div class="stat-num" id="adsWatched">0</div><div class="stat-label">Ads Watched</div></div>
+    <div class="stat-box"><div class="stat-num" id="totalEarned">$0.00</div><div class="stat-label">Total Earned</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Watch & Earn</div>
+    <button class="btn" id="watchBtn">Watch Ad (+$0.02)</button>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <div class="msg" id="adMsg"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Invite Friends</div>
+    <p style="font-size:13px; color:var(--muted); margin-bottom:10px;">Earn $0.40 for every friend who joins</p>
+    <button class="btn btn-secondary" id="inviteBtn">Get Invite Link</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Withdraw</div>
+    <input type="number" id="withdrawAmount" placeholder="Amount ($2.00 minimum)" />
+    <input type="text" id="withdrawDest" placeholder="PayPal email / wallet address" />
+    <button class="btn btn-secondary" id="withdrawBtn">Request Withdrawal</button>
+    <div class="msg" id="withdrawMsg"></div>
+  </div>
+
+<script>
+  const tg = window.Telegram.WebApp;
+  tg.ready();
+  tg.expand();
+
+  const API_BASE = window.location.origin; // backend served from same domain, adjust if separate
+  const initData = tg.initData;
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const refCode = urlParams.get("ref") || "";
+
+  const balanceEl = document.getElementById("balance");
+  const adsWatchedEl = document.getElementById("adsWatched");
+  const totalEarnedEl = document.getElementById("totalEarned");
+  const progressFill = document.getElementById("progressFill");
+  const adMsg = document.getElementById("adMsg");
+  const watchBtn = document.getElementById("watchBtn");
+  const withdrawMsg = document.getElementById("withdrawMsg");
+
+  let state = { daily_limit: 15, ads_today: 0, ad_reward: 0.02 };
+
+  async function apiCall(path, options = {}) {
+    const res = await fetch(API_BASE + path, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Telegram-Init-Data": initData,
+        ...(options.headers || {}),
+      },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Request failed" }));
+      throw new Error(err.error || "Request failed");
+    }
+    return res.json();
+  }
+
+  function render() {
+    balanceEl.textContent = "$" + state.balance.toFixed(2);
+    adsWatchedEl.textContent = state.ads_watched;
+    totalEarnedEl.textContent = "$" + state.total_earned.toFixed(2);
+    const pct = Math.min(100, (state.ads_today / state.daily_limit) * 100);
+    progressFill.style.width = pct + "%";
+    adMsg.textContent = `${state.ads_today} / ${state.daily_limit} ads today`;
+    watchBtn.disabled = state.ads_today >= state.daily_limit;
+    watchBtn.textContent = watchBtn.disabled
+      ? "Daily limit reached"
+      : `Watch Ad (+$${state.ad_reward.toFixed(2)})`;
+  }
+
+  async function loadUser() {
+    try {
+      const path = "/api/me" + (refCode ? "?ref=" + encodeURIComponent(refCode) : "");
+      state = await apiCall(path);
+      render();
+    } catch (e) {
+      adMsg.textContent = "Failed to load: " + e.message;
+    }
+  }
+
+  watchBtn.addEventListener("click", async () => {
+    watchBtn.disabled = true;
+    adMsg.textContent = "Loading ad...";
+
+    // === PLUG YOUR AD NETWORK SDK HERE ===
+    // Example for Monetag: window.show_9xxxxxx().then(() => completeAdWatch());
+    // For now, simulate ad watch with a short delay:
+    setTimeout(completeAdWatch, 1500);
+  });
+
+  async function completeAdWatch() {
+    try {
+      const res = await apiCall("/api/watch-ad", { method: "POST" });
+      state.balance = res.new_balance;
+      state.ads_today = res.ads_today;
+      state.ads_watched += 1;
+      state.total_earned += state.ad_reward;
+      render();
+      adMsg.textContent = "Reward credited!";
+      tg.HapticFeedback.notificationOccurred("success");
+    } catch (e) {
+      adMsg.textContent = "Error: " + e.message;
+      watchBtn.disabled = false;
+    }
+  }
+
+  document.getElementById("inviteBtn").addEventListener("click", () => {
+    const botUsername = "EarnLiteApp_bot"; // <-- change to your bot username
+    const myId = tg.initDataUnsafe?.user?.id || "";
+    const link = `https://t.me/${botUsername}?start=${myId}`;
+    tg.showPopup({
+      title: "Your Invite Link",
+      message: link,
+      buttons: [{ type: "close" }],
+    });
+    navigator.clipboard?.writeText(link);
+  });
+
+  document.getElementById("withdrawBtn").addEventListener("click", async () => {
+    const amount = parseFloat(document.getElementById("withdrawAmount").value);
+    const destination = document.getElementById("withdrawDest").value;
+    if (!amount || !destination) {
+      withdrawMsg.textContent = "Fill in both fields.";
+      return;
+    }
+    try {
+      const res = await apiCall("/api/withdraw", {
+        method: "POST",
+        body: JSON.stringify({ amount, method: "manual", destination }),
+      });
+      withdrawMsg.textContent = res.message;
+      loadUser();
+    } catch (e) {
+      withdrawMsg.textContent = "Error: " + e.message;
+    }
+  });
+
+  loadUser();
+</script>
+</body>
+</html>
