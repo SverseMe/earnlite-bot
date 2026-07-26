@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>EarnLite</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src='//libtl.com/sdk.js' data-zone='11408339' data-sdk='show_11408339'></script>
 <style>
   :root {
     --bg: #0f1220;
@@ -166,16 +166,17 @@
       adMsg.textContent = "Failed to load: " + e.message;
     }
   }
-
-  watchBtn.addEventListener("click", async () => {
-    watchBtn.disabled = true;
-    adMsg.textContent = "Loading ad...";
-
-    // === PLUG YOUR AD NETWORK SDK HERE ===
-    // Example for Monetag: window.show_9xxxxxx().then(() => completeAdWatch());
-    // For now, simulate ad watch with a short delay:
-    setTimeout(completeAdWatch, 1500);
+watchBtn.addEventListener("click", async () => {
+  watchBtn.disabled = true;
+  adMsg.textContent = "Loading ad...";
+  show_11408339().then(() => {
+    completeAdWatch();
+  }).catch(() => {
+    adMsg.textContent = "Ad failed to load. Try again.";
+    watchBtn.disabled = false;
   });
+});
+ 
 
   async function completeAdWatch() {
     try {
