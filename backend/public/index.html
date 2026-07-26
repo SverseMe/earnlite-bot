@@ -169,9 +169,25 @@
 watchBtn.addEventListener("click", async () => {
   watchBtn.disabled = true;
   adMsg.textContent = "Loading ad...";
+
+  let handled = false;
+  const timeout = setTimeout(() => {
+    if (!handled) {
+      handled = true;
+      adMsg.textContent = "No ad available right now. Try again in a bit.";
+      watchBtn.disabled = false;
+    }
+  }, 8000);
+
   show_11408339().then(() => {
+    if (handled) return;
+    handled = true;
+    clearTimeout(timeout);
     completeAdWatch();
   }).catch(() => {
+    if (handled) return;
+    handled = true;
+    clearTimeout(timeout);
     adMsg.textContent = "Ad failed to load. Try again.";
     watchBtn.disabled = false;
   });
